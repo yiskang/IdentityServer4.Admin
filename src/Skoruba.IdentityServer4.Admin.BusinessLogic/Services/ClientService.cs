@@ -5,6 +5,7 @@ using IdentityServer4.Models;
 using Microsoft.EntityFrameworkCore;
 using Skoruba.IdentityServer4.Admin.BusinessLogic.Dtos.Configuration;
 using Skoruba.IdentityServer4.Admin.BusinessLogic.Dtos.Enums;
+using Skoruba.IdentityServer4.Admin.BusinessLogic.Events.Client;
 using Skoruba.IdentityServer4.Admin.BusinessLogic.Helpers;
 using Skoruba.IdentityServer4.Admin.BusinessLogic.Mappers;
 using Skoruba.IdentityServer4.Admin.BusinessLogic.Repositories.Interfaces;
@@ -12,6 +13,7 @@ using Skoruba.IdentityServer4.Admin.BusinessLogic.Resources;
 using Skoruba.IdentityServer4.Admin.BusinessLogic.Services.Interfaces;
 using Skoruba.IdentityServer4.Admin.BusinessLogic.Shared.Dtos.Common;
 using Skoruba.IdentityServer4.Admin.BusinessLogic.Shared.ExceptionHandling;
+using Skoruba.IdentityServer4.Admin.BusinessLogic.Shared.Services.Interfaces;
 using Skoruba.IdentityServer4.Admin.EntityFramework.Interfaces;
 
 namespace Skoruba.IdentityServer4.Admin.BusinessLogic.Services
@@ -21,12 +23,14 @@ namespace Skoruba.IdentityServer4.Admin.BusinessLogic.Services
     {
         private readonly IClientRepository<TDbContext> _clientRepository;
         private readonly IClientServiceResources _clientServiceResources;
+        private readonly IEventService _eventService;
         private const string SharedSecret = "SharedSecret";
 
-        public ClientService(IClientRepository<TDbContext> clientRepository, IClientServiceResources clientServiceResources)
+        public ClientService(IClientRepository<TDbContext> clientRepository, IClientServiceResources clientServiceResources, IEventService eventService)
         {
             _clientRepository = clientRepository;
             _clientServiceResources = clientServiceResources;
+            _eventService = eventService;
         }
 
         private void HashClientSharedSecret(ClientSecretsDto clientSecret)
@@ -156,7 +160,11 @@ namespace Skoruba.IdentityServer4.Admin.BusinessLogic.Services
             PrepareClientTypeForNewClient(client);
             var clientEntity = client.ToEntity();
 
-            return await _clientRepository.AddClientAsync(clientEntity);
+            var clientId = await _clientRepository.AddClientAsync(clientEntity);
+            
+            await _eventService.RaiseAsync(new ClientAddedEvent(client));
+
+            return clientId;
         }
 
         public async Task<int> UpdateClientAsync(ClientDto client)
